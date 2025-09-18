@@ -8,7 +8,7 @@ from pynput import keyboard
 
 class DroneController:
     def __init__(self):
-        self.thrust = 14468.429183500699  # Base hover RPM - constant hover
+        self.thrust = 14475.8  # Base hover RPM - constant hover
         self.rotation_delta = 200  # Differential RPM for rotation
         self.thrust_delta = 10  # Amount to change thrust by when accelerating/decelerating
         self.running = True
@@ -91,12 +91,20 @@ class DroneController:
         return self.rpms
 
 
-def run_sim(scene, drone, controller):
+def run_sim(scene, drone, controller, is_drone_entity=True):
     while controller.running:
         try:
             # Update drone with current RPMs
             rpms = controller.update_thrust()
-            drone.set_propellels_rpm(rpms)
+            
+            if is_drone_entity:
+                # For DroneEntity, we can control propellers
+                drone.set_propellels_rpm(rpms)
+            else:
+                # For RigidEntity (XML models), we can't control propellers directly
+                # Just print the RPMs for demonstration
+                if controller.running and any(key in controller.pressed_keys for key in [keyboard.Key.up, keyboard.Key.down, keyboard.Key.left, keyboard.Key.right, keyboard.Key.space, keyboard.Key.shift]):
+                    print(f"RPMs: {rpms} (XML model - no propeller control available)")
 
             # Update physics
             scene.step()
@@ -113,6 +121,10 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-v", "--vis", action="store_true", default=True, help="Enable visualization (default: True)")
     parser.add_argument("-m", "--mac", action="store_true", default=False, help="Running on MacOS (default: False)")
+    parser.add_argument("--model-type", choices=["urdf", "xml"], default="urdf", 
+                       help="Model type to use: urdf or xml (default: urdf)")
+    parser.add_argument("--model-file", type=str, 
+                       help="Path to model file (if not specified, uses default based on model type)")
     args = parser.parse_args()
 
     # Initialize Genesis
@@ -137,11 +149,44 @@ def main():
 
     # Add entities
     plane = scene.add_entity(gs.morphs.Plane())
-    drone = scene.add_entity(
-        morph=gs.morphs.Drone(
-            file="urdf/drones/cf2x.urdf",
-            pos=(0.0, 0, 0.5),  # Start a bit higher
-        ),
+    
+    # Determine model file path
+    if args.model_file:
+        model_file = args.model_file
+    else:
+        if args.model_type == "urdf":
+            model_file = "urdf/drones/cf2x.urdf"
+        else:  # xml
+            model_file = "xml/simple_drone.xml"
+    
+    print(f"Loading {args.model_type.upper()} model from: {model_file}")
+    
+    # Add drone based on model type
+    is_drone_entity = True
+    if args.model_type == "urdf":
+        drone = scene.add_entity(
+            morph=gs.morphs.Drone(
+                file=model_file,
+                pos=(0.0, 0, 0.5),  # Start a bit higher
+            ),
+        )
+    else:  # xml
+        # For XML models, we need to use RigidEntity since Drone morph only supports URDF
+        drone = scene.add_entity(
+            morph=gs.morphs.MJCF(
+                file=model_file,
+                pos=(0.0, 0, 0.5),  # Start a bit higher
+            ),
+        )
+        is_drone_entity = False
+        print("Note: XML models are loaded as RigidEntity, not DroneEntity.")
+        print("Propeller control features may not be available.")
+    
+    ball = scene.add_entity(
+        gs.morphs.Sphere(
+            pos=(0.0, 0.0, 0.3),
+            radius=0.05,
+        )
     )
 
     scene.viewer.follow_entity(drone)
@@ -167,7 +212,7 @@ def main():
 
     if args.mac:
         # Run simulation in another thread
-        sim_thread = threading.Thread(target=run_sim, args=(scene, drone, controller))
+        sim_thread = threading.Thread(target=run_sim, args=(scene, drone, controller, is_drone_entity))
         sim_thread.start()
 
         if args.vis:
@@ -177,7 +222,7 @@ def main():
         sim_thread.join()
     else:
         # Run simulation in main thread
-        run_sim(scene, drone, controller)
+        run_sim(scene, drone, controller, is_drone_entity)
     listener.stop()
 
 

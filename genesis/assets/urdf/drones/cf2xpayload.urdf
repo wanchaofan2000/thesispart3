@@ -1,0 +1,697 @@
+<?xml version="1.0" encoding="utf-8"?>
+<robot name="cf2">
+
+  <!-- Drone morph 推进参数 -->
+  <properties arm="0.0397" kf="3.16e-10" km="7.94e-12"
+              thrust2weight="2.25" max_speed_kmh="30"
+              gnd_eff_coeff="11.36859" prop_radius="0.0231348"
+              drag_coeff_xy="9.1785e-7" drag_coeff_z="1.0311e-6"
+              dw_coeff_1="2267.18" dw_coeff_2="0.16" dw_coeff_3="-0.11"/>
+
+  <!-- 机体 -->
+  <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.027"/>
+      <inertia ixx="1.4e-5" ixy="0" ixz="0" iyy="1.4e-5" iyz="0" izz="2.17e-5"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><mesh filename="./body.obj" scale="1 1 1"/></geometry>
+      <material name="grey"><color rgba="0.5 0.5 0.5 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><cylinder radius="0.06" length="0.025"/></geometry>
+    </collision>
+  </link>
+
+  <!-- 四个桨（保持 fixed，用于推进与渲染定位） -->
+  <link name="prop0_link">
+    <inertial><origin xyz="0.028 -0.028 0" rpy="0 0 0"/><mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/></inertial>
+    <visual>
+      <origin xyz="0.0323 -0.0323 0.0132" rpy="0 0 0"/>
+      <geometry><mesh filename="./propeller0.obj"/></geometry>
+    </visual>
+  </link>
+  <joint name="prop0_joint" type="fixed">
+    <parent link="base_link"/><child link="prop0_link"/>
+  </joint>
+
+  <link name="prop1_link">
+    <inertial><origin xyz="-0.028 -0.028 0" rpy="0 0 0"/><mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/></inertial>
+    <visual>
+      <origin xyz="-0.0323 -0.0323 0.0132" rpy="0 0 0"/>
+      <geometry><mesh filename="./propeller1.obj"/></geometry>
+    </visual>
+  </link>
+  <joint name="prop1_joint" type="fixed">
+    <parent link="base_link"/><child link="prop1_link"/>
+  </joint>
+
+  <link name="prop2_link">
+    <inertial><origin xyz="-0.028 0.028 0" rpy="0 0 0"/><mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/></inertial>
+    <visual>
+      <origin xyz="-0.0323 0.0323 0.0132" rpy="0 0 0"/>
+      <geometry><mesh filename="./propeller2.obj"/></geometry>
+    </visual>
+  </link>
+  <joint name="prop2_joint" type="fixed">
+    <parent link="base_link"/><child link="prop2_link"/>
+  </joint>
+
+  <link name="prop3_link">
+    <inertial><origin xyz="0.028 0.028 0" rpy="0 0 0"/><mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/></inertial>
+    <visual>
+      <origin xyz="0.0323 0.0323 0.0132" rpy="0 0 0"/>
+      <geometry><mesh filename="./propeller3.obj"/></geometry>
+    </visual>
+  </link>
+  <joint name="prop3_joint" type="fixed">
+    <parent link="base_link"/><child link="prop3_link"/>
+  </joint>
+
+  <link name="center_of_mass_link">
+    <inertial><origin xyz="0 0 0" rpy="0 0 0"/><mass value="0"/>
+      <inertia ixx="0" ixy="0" ixz="0" iyy="0" iyz="0" izz="0"/></inertial>
+  </link>
+  <joint name="center_of_mass_joint" type="fixed">
+    <parent link="base_link"/><child link="center_of_mass_link"/>
+  </joint>
+
+  <!-- ========== 新增：柔性吊索系统（合理质量、阻尼、2-DoF万向节） ========== -->
+  
+  <!-- 绳索连接点（从无人机底部开始） -->
+  <link name="rope_attachment">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="rope_attachment_joint" type="fixed">
+    <parent link="base_link"/>
+    <child link="rope_attachment"/>
+    <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第1个万向节：X轴旋转 -->
+  <link name="gimbal_1_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_1_x_joint" type="revolute">
+    <parent link="rope_attachment"/>
+    <child link="gimbal_1_x"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第1个万向节：Y轴旋转 -->
+  <link name="gimbal_1_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_1_y_joint" type="revolute">
+    <parent link="gimbal_1_x"/>
+    <child link="gimbal_1_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第1段绳索（合理质量、无碰撞，仅视觉） -->
+  <link name="rope_segment_1">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+    <!-- 无碰撞检测 -->
+  </link>
+  <joint name="rope_segment_1_joint" type="fixed">
+    <parent link="gimbal_1_y"/>
+    <child link="rope_segment_1"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第2个万向节：X轴旋转 -->
+  <link name="gimbal_2_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_2_x_joint" type="revolute">
+    <parent link="rope_segment_1"/>
+    <child link="gimbal_2_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第2个万向节：Y轴旋转 -->
+  <link name="gimbal_2_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_2_y_joint" type="revolute">
+    <parent link="gimbal_2_x"/>
+    <child link="gimbal_2_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第2段绳索 -->
+  <link name="rope_segment_2">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_2_joint" type="fixed">
+    <parent link="gimbal_2_y"/>
+    <child link="rope_segment_2"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第3个万向节：X轴旋转 -->
+  <link name="gimbal_3_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_3_x_joint" type="revolute">
+    <parent link="rope_segment_2"/>
+    <child link="gimbal_3_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第3个万向节：Y轴旋转 -->
+  <link name="gimbal_3_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_3_y_joint" type="revolute">
+    <parent link="gimbal_3_x"/>
+    <child link="gimbal_3_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第3段绳索 -->
+  <link name="rope_segment_3">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_3_joint" type="fixed">
+    <parent link="gimbal_3_y"/>
+    <child link="rope_segment_3"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第4个万向节：X轴旋转 -->
+  <link name="gimbal_4_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_4_x_joint" type="revolute">
+    <parent link="rope_segment_3"/>
+    <child link="gimbal_4_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第4个万向节：Y轴旋转 -->
+  <link name="gimbal_4_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_4_y_joint" type="revolute">
+    <parent link="gimbal_4_x"/>
+    <child link="gimbal_4_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第4段绳索 -->
+  <link name="rope_segment_4">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_4_joint" type="fixed">
+    <parent link="gimbal_4_y"/>
+    <child link="rope_segment_4"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第5个万向节：X轴旋转 -->
+  <link name="gimbal_5_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_5_x_joint" type="revolute">
+    <parent link="rope_segment_4"/>
+    <child link="gimbal_5_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第5个万向节：Y轴旋转 -->
+  <link name="gimbal_5_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_5_y_joint" type="revolute">
+    <parent link="gimbal_5_x"/>
+    <child link="gimbal_5_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第5段绳索 -->
+  <link name="rope_segment_5">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_5_joint" type="fixed">
+    <parent link="gimbal_5_y"/>
+    <child link="rope_segment_5"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第6个万向节：X轴旋转 -->
+  <link name="gimbal_6_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_6_x_joint" type="revolute">
+    <parent link="rope_segment_5"/>
+    <child link="gimbal_6_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第6个万向节：Y轴旋转 -->
+  <link name="gimbal_6_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_6_y_joint" type="revolute">
+    <parent link="gimbal_6_x"/>
+    <child link="gimbal_6_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第6段绳索 -->
+  <link name="rope_segment_6">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_6_joint" type="fixed">
+    <parent link="gimbal_6_y"/>
+    <child link="rope_segment_6"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第7个万向节：X轴旋转 -->
+  <link name="gimbal_7_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_7_x_joint" type="revolute">
+    <parent link="rope_segment_6"/>
+    <child link="gimbal_7_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第7个万向节：Y轴旋转 -->
+  <link name="gimbal_7_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_7_y_joint" type="revolute">
+    <parent link="gimbal_7_x"/>
+    <child link="gimbal_7_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第7段绳索 -->
+  <link name="rope_segment_7">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_7_joint" type="fixed">
+    <parent link="gimbal_7_y"/>
+    <child link="rope_segment_7"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第8个万向节：X轴旋转 -->
+  <link name="gimbal_8_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_8_x_joint" type="revolute">
+    <parent link="rope_segment_7"/>
+    <child link="gimbal_8_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第8个万向节：Y轴旋转 -->
+  <link name="gimbal_8_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_8_y_joint" type="revolute">
+    <parent link="gimbal_8_x"/>
+    <child link="gimbal_8_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第8段绳索 -->
+  <link name="rope_segment_8">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_8_joint" type="fixed">
+    <parent link="gimbal_8_y"/>
+    <child link="rope_segment_8"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第9个万向节：X轴旋转 -->
+  <link name="gimbal_9_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_9_x_joint" type="revolute">
+    <parent link="rope_segment_8"/>
+    <child link="gimbal_9_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第9个万向节：Y轴旋转 -->
+  <link name="gimbal_9_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_9_y_joint" type="revolute">
+    <parent link="gimbal_9_x"/>
+    <child link="gimbal_9_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第9段绳索 -->
+  <link name="rope_segment_9">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_9_joint" type="fixed">
+    <parent link="gimbal_9_y"/>
+    <child link="rope_segment_9"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 第10个万向节：X轴旋转 -->
+  <link name="gimbal_10_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_10_x_joint" type="revolute">
+    <parent link="rope_segment_9"/>
+    <child link="gimbal_10_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第10个万向节：Y轴旋转 -->
+  <link name="gimbal_10_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="gimbal_10_y_joint" type="revolute">
+    <parent link="gimbal_10_x"/>
+    <child link="gimbal_10_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.1" velocity="10"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 第10段绳索 -->
+  <link name="rope_segment_10">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.0005"/>
+      <inertia ixx="1e-8" ixy="0" ixz="0" iyy="1e-8" iyz="0" izz="1e-8"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 -0.05" rpy="0 0 0"/>
+      <geometry><cylinder length="0.10" radius="0.003"/></geometry>
+      <material name="rope_dark"><color rgba="0.1 0.1 0.1 1"/></material>
+    </visual>
+  </link>
+  <joint name="rope_segment_10_joint" type="fixed">
+    <parent link="gimbal_10_y"/>
+    <child link="rope_segment_10"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+  </joint>
+
+  <!-- 载荷连接万向节：X轴旋转 -->
+  <link name="payload_gimbal_x">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="payload_gimbal_x_joint" type="revolute">
+    <parent link="rope_segment_10"/>
+    <child link="payload_gimbal_x"/>
+    <origin xyz="0 0 -0.10" rpy="0 0 0"/>
+    <axis xyz="1 0 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.05" velocity="20"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 载荷连接万向节：Y轴旋转 -->
+  <link name="payload_gimbal_y">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="1e-6"/>
+      <inertia ixx="1e-9" ixy="0" ixz="0" iyy="1e-9" iyz="0" izz="1e-9"/>
+    </inertial>
+  </link>
+  <joint name="payload_gimbal_y_joint" type="revolute">
+    <parent link="payload_gimbal_x"/>
+    <child link="payload_gimbal_y"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 1 0"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.05" velocity="20"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+  <!-- 小球载荷 -->
+  <link name="payload_ball">
+    <inertial>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <mass value="0.005"/>
+      <!-- 球惯量：I = 2/5 m r^2（r=0.025 m） -->
+      <inertia ixx="1.25e-09" ixy="0" ixz="0"
+               iyy="1.25e-09" iyz="0" izz="1.25e-09"/>
+    </inertial>
+    <visual>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.025"/></geometry>
+      <material name="ball_red"><color rgba="0.9 0.1 0.1 1"/></material>
+    </visual>
+    <collision>
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry><sphere radius="0.025"/></geometry>
+    </collision>
+  </link>
+
+  <!-- 载荷连接关节 -->
+  <joint name="payload_joint" type="revolute">
+    <parent link="payload_gimbal_y"/>
+    <child link="payload_ball"/>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+    <axis xyz="0 0 1"/>
+    <limit lower="-3.1416" upper="3.1416" effort="0.05" velocity="20"/>
+    <dynamics damping="0.01" friction="0.001"/>
+  </joint>
+
+</robot>

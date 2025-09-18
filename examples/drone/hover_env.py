@@ -69,7 +69,7 @@ class HoverEnv:
                 ),
                 surface=gs.surfaces.Rough(
                     diffuse_texture=gs.textures.ColorTexture(
-                        color=(1.0, 0.5, 0.5),
+                        color=(1.0, 0.1, 0.1),
                     ),
                 ),
             )
@@ -90,7 +90,7 @@ class HoverEnv:
         self.base_init_pos = torch.tensor(self.env_cfg["base_init_pos"], device=gs.device)
         self.base_init_quat = torch.tensor(self.env_cfg["base_init_quat"], device=gs.device)
         self.inv_base_init_quat = inv_quat(self.base_init_quat)
-        self.drone = self.scene.add_entity(gs.morphs.Drone(file="urdf/drones/cf2x.urdf"))
+        self.drone = self.scene.add_entity(gs.morphs.Drone(file="urdf/drones/cf2xpayload.urdf"))
 
         # build scene
         self.scene.build(n_envs=num_envs)

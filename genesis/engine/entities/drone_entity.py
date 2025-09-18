@@ -1,6 +1,7 @@
 import os
 import xml.etree.ElementTree as ET
 
+import numpy as np
 import torch
 import taichi as ti
 
@@ -13,12 +14,53 @@ from .rigid_entity import RigidEntity
 @ti.data_oriented
 class DroneEntity(RigidEntity):
     def _load_scene(self, morph, surface):
-        super()._load_scene(morph, surface)
+        # Handle MJCF files differently from URDF files
+        if isinstance(morph, gs.morphs.DroneMJCF):
+            # For DroneMJCF, use MJCF parser
+            import genesis.utils.mjcf as mju
+            l_infos, links_j_infos, links_g_infos, eqs_info = mju.parse_xml(morph, surface)
+            
+            # Set is_robot field for MJCF files (this is normally done in RigidEntity._load_scene)
+            for l_info, link_j_infos in zip(l_infos, links_j_infos):
+                if not link_j_infos or all(j_info["type"] == gs.JOINT_TYPE.FIXED for j_info in link_j_infos):
+                    if l_info["parent_idx"] >= 0:
+                        l_info["is_robot"] = l_infos[l_info["parent_idx"]]["is_robot"]
+                    else:
+                        l_info["is_robot"] = np.array(False, dtype=np.bool_)
+                elif all(j_info["type"] == gs.JOINT_TYPE.FREE for j_info in link_j_infos):
+                    l_info["is_robot"] = np.array(False, dtype=np.bool_)
+                else:
+                    l_info["is_robot"] = np.array(True, dtype=np.bool_)
+                    if l_info["parent_idx"] >= 0:
+                        l_infos[l_info["parent_idx"]]["is_robot"][()] = True
+            
+            # Add links, joints, and geoms
+            for l_info, j_infos, g_infos in zip(l_infos, links_j_infos, links_g_infos):
+                self._add_by_info(l_info, j_infos, g_infos, morph, surface)
+            
+            # Add equalities
+            for eq_info in eqs_info:
+                self._add_equality(
+                    name=eq_info["name"],
+                    type=eq_info["type"],
+                    objs_name=eq_info["objs_name"],
+                    data=eq_info["data"],
+                    sol_params=eq_info["sol_params"],
+                )
+        else:
+            # For regular Drone (URDF), use parent's method
+            super()._load_scene(morph, surface)
 
         # additional drone specific attributes
-        properties = ET.parse(os.path.join(mu.get_assets_dir(), morph.file)).getroot()[0].attrib
-        self._KF = float(properties["kf"])
-        self._KM = float(properties["km"])
+        if hasattr(morph, 'kf') and morph.kf is not None and hasattr(morph, 'km') and morph.km is not None:
+            # Use provided KF and KM values (for DroneMJCF)
+            self._KF = float(morph.kf)
+            self._KM = float(morph.km)
+        else:
+            # Extract from URDF properties (for Drone)
+            properties = ET.parse(os.path.join(mu.get_assets_dir(), morph.file)).getroot()[0].attrib
+            self._KF = float(properties["kf"])
+            self._KM = float(properties["km"])
 
         self._n_propellers = len(morph.propellers_link_name)
 

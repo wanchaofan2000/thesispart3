@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mujoco model="simple_drone">
+  
+  <!-- 编译器选项 -->
+  <compiler meshdir="./" texturedir="./" />
+  
+  <!-- 默认选项 -->
+  <default>
+    <default class="drone_body">
+      <geom type="cylinder" size="0.06 0.0125" rgba="0.5 0.5 0.5 1" />
+    </default>
+    <default class="propeller">
+      <geom type="cylinder" size="0.05 0.005" rgba="0.8 0.8 0.8 1" />
+    </default>
+  </default>
+  
+  <!-- 世界体 -->
+  <worldbody>
+    <!-- 无人机主体 -->
+    <body name="base_link" pos="0 0 0.5">
+      <inertial pos="0 0 0" mass="0.027" diaginertia="1.4e-5 1.4e-5 2.17e-5" />
+      <geom class="drone_body" pos="0 0 0" />
+      
+      <!-- 螺旋桨1 - 前左 -->
+      <body name="prop0_link" pos="0.08 0.08 0">
+        <inertial pos="0 0 0" mass="0.001" diaginertia="1e-6 1e-6 2e-6" />
+        <geom class="propeller" pos="0 0 0" />
+      </body>
+      
+      <!-- 螺旋桨2 - 前右 -->
+      <body name="prop1_link" pos="-0.08 0.08 0">
+        <inertial pos="0 0 0" mass="0.001" diaginertia="1e-6 1e-6 2e-6" />
+        <geom class="propeller" pos="0 0 0" />
+      </body>
+      
+      <!-- 螺旋桨3 - 后左 -->
+      <body name="prop2_link" pos="-0.08 -0.08 0">
+        <inertial pos="0 0 0" mass="0.001" diaginertia="1e-6 1e-6 2e-6" />
+        <geom class="propeller" pos="0 0 0" />
+      </body>
+      
+      <!-- 螺旋桨4 - 后右 -->
+      <body name="prop3_link" pos="0.08 -0.08 0">
+        <inertial pos="0 0 0" mass="0.001" diaginertia="1e-6 1e-6 2e-6" />
+        <geom class="propeller" pos="0 0 0" />
+      </body>
+    </body>
+    
+    <!-- 地面 -->
+    <geom name="ground" type="plane" pos="0 0 0" size="10 10 0.1" rgba="0.7 0.7 0.7 1" />
+  </worldbody>
+  
+  <!-- 无人机动力学参数 - 使用properties标签来模拟URDF的properties -->
+  <custom>
+    <text name="drone_properties" data="kf=3.16e-10;km=7.94e-12;arm=0.0397;thrust2weight=2.25;max_speed_kmh=30;gnd_eff_coeff=11.36859;prop_radius=0.0231348;drag_coeff_xy=9.1785e-7;drag_coeff_z=1.0311e-6;dw_coeff_1=2267.18;dw_coeff_2=0.16;dw_coeff_3=-0.11" />
+  </custom>
+  
+</mujoco>

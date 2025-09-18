@@ -89,7 +89,7 @@ def main():
     for point in points:
         fly_to_point(point, controller, scene, cam)
 
-    cam.stop_recording(save_to_filename="../../videos/fly_route.mp4")
+    cam.stop_recording(save_to_filename="videos/fly_route.mp4")
 
 
 if __name__ == "__main__":

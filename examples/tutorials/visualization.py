@@ -26,31 +26,33 @@ scene = gs.Scene(
 plane = scene.add_entity(
     gs.morphs.Plane(),
 )
-franka = scene.add_entity(
-    gs.morphs.MJCF(file="xml/franka_emika_panda/panda.xml"),
-)
+# franka = scene.add_entity(
+#     gs.morphs.MJCF(file="xml/franka_emika_panda/panda.xml"),
+# )
+
+car = scene.add_entity(gs.morphs.URDF(file="urdf/wheel_car.urdf", pos=(0, -1, 0.1)))
 
 cam = scene.add_camera(
     res=(640, 480),
     pos=(3.5, 0.0, 2.5),
     lookat=(0, 0, 0.5),
     fov=30,
+    
     GUI=True,
 )
 
 scene.build()
 
 # render rgb, depth, segmentation, normal
-rgb, depth, segmentation, normal = cam.render(rgb=True, depth=True, segmentation=True, normal=True)
+rgb, depth, segmentation, normal = cam.render(rgb=False, depth=False, segmentation=True, normal=False)
 
 cam.start_recording()
 import numpy as np
 
-for i in range(120):
+for i in range(600):
     scene.step()
     cam.set_pose(
-        pos=(3.0 * np.sin(i / 60), 3.0 * np.cos(i / 60), 2.5),
+        pos=(0, 0, 2.5),
         lookat=(0, 0, 0.5),
     )
     cam.render()
-cam.stop_recording(save_to_filename="video.mp4", fps=60)

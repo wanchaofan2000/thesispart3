@@ -993,6 +993,113 @@ class Drone(FileMorph):
             gs.raise_exception(f"Unsupported `model`: {self.model}.")
 
 
+class DroneMJCF(FileMorph):
+    """
+    Morph loaded from a MJCF file for creating a `DroneEntity`.
+    This extends MJCF support to work with DroneEntity's built-in propeller dynamics.
+
+    Note
+    ----
+    Visual geom in the propeller links will be used for spinning animation.
+    This morph automatically extracts drone dynamics parameters from MJCF actuator gear parameters.
+
+    Parameters
+    ----------
+    file : str
+        The path to the MJCF file.
+    kf : float, optional
+        Thrust coefficient. If not provided, will be extracted from MJCF actuator gear parameters.
+    km : float, optional  
+        Moment coefficient. If not provided, will be extracted from MJCF actuator gear parameters.
+    propellers_link_name : sequence of str, optional
+        The names of the links that represent the propellers. Defaults to
+        ('prop0_link', 'prop1_link', 'prop2_link', 'prop3_link').
+    propellers_spin : sequence of int, optional
+        The spin direction of the propellers. 1: CCW, -1: CW. Defaults to (-1, 1, -1, 1).
+    scale : float, optional
+        The scaling factor for the size of the entity. Defaults to 1.0.
+    pos : tuple, shape (3,), optional
+        The position of the entity in meters. Defaults to (0.0, 0.0, 0.0).
+    euler : tuple, shape (3,), optional
+        The euler angle of the entity in degrees. This follows scipy's extrinsic x-y-z rotation convention. Defaults to
+        (0.0, 0.0, 0.0).
+    quat : tuple, shape (4,), optional
+        The quaternion (w-x-y-z convention) of the entity. If specified, `euler` will be ignored. Defaults to None.
+    decimate : bool, optional
+        Whether to decimate (simplify) the mesh. Defaults to True. **This is only used for RigidEntity.**
+    decimate_face_num : int, optional
+        The number of faces to decimate to. Defaults to 500. **This is only used for RigidEntity.**
+    decimate_aggressiveness : int
+        How hard the decimation process will try to match the target number of faces, as a integer ranging from 0 to 8.
+        0 is losseless. 2 preserves all features of the original geometry. 5 may significantly alters the original
+        geometry if necessary. 8 does what needs to be done at all costs. Defaults to 5.
+        **This is only used for RigidEntity.**
+    convexify : bool, optional
+        Whether to convexify the entity. When convexify is True, all the meshes in the entity will each be converted
+        to a set of convex hulls. The mesh with be decomposed into multiple convex components if a single one is not
+        sufficient to met the desired accuracy (see 'decompose_(robot|object)_error_threshold' documentation). The
+        module 'coacd' is used for this decomposition process. If not given, it defaults to `True` for `RigidEntity`
+        and `False` for other deformable entities.
+    decompose_nonconvex : bool, optional
+        This parameter is deprecated. Please use 'convexify' and 'decompose_(robot|object)_error_threshold' instead.
+    decompose_object_error_threshold : bool, optional:
+        For basic rigid objects (mug, table...), skip convex decomposition if the relative difference between the
+        volume of original mesh and its convex hull is lower than this threashold.
+        0.0 to enforce decomposition, float("inf") to disable it completely. Defaults to 0.15 (15%).
+    decompose_robot_error_threshold : bool, optional:
+        For poly-articulated robots, skip convex decomposition if the relative difference between the volume of
+        original mesh and its convex hull is lower than this threashold.
+        0.0 to enforce decomposition, float("inf") to disable it completely. Defaults to float("inf").
+    coacd_options : CoacdOptions, optional
+        Options for configuring coacd convex decomposition. Needs to be a `gs.options.CoacdOptions` object.
+    visualization : bool, optional
+        Whether the entity needs to be visualized. Set it to False if you need a invisible object only for collision
+        purposes. Defaults to True. `visualization` and `collision` cannot both be False.
+    collision : bool, optional
+        **NB**: Drone doesn't support collision checking for now.
+    requires_jac_and_IK : bool, optional
+        Whether this morph, if created as `RigidEntity`, requires jacobian and inverse kinematics. Defaults to True.
+    default_armature : float, optional
+        Default rotor inertia of the actuators. In practice it is applied to all joints regardless of whether they are
+        actuated. None to disable. Default to 0.1.
+    """
+
+    # Drone-specific parameters
+    kf: Optional[float] = None
+    km: Optional[float] = None
+    model: str = "CF2X"  # Default model type
+    propellers_link_name: Sequence[str] = ("prop0_link", "prop1_link", "prop2_link", "prop3_link")
+    propellers_spin: Sequence[int] = (-1, 1, -1, 1)  # 1: CCW, -1: CW
+    links_to_keep: Sequence[str] = ()
+    
+    # MJCF-specific parameters
+    pos: Optional[tuple] = None
+    euler: Optional[tuple] = None
+    quat: Optional[tuple] = None
+    requires_jac_and_IK: bool = True
+    default_armature: Optional[float] = 0.1
+
+    def __init__(self, **data):
+        super().__init__(**data)
+        
+        if not self.file.endswith(".xml"):
+            gs.raise_exception(f"Expected `.xml` extension for MJCF file: {self.file}")
+
+        # Anisotropic scaling is ill-defined for poly-articulated robots
+        if isinstance(self.scale, np.ndarray):
+            if self.scale.std() > gs.EPS:
+                gs.raise_exception("Anisotropic scaling is not supported by MJCF morph.")
+            self.scale = self.scale.mean()
+
+        # Make sure that Propellers links are preserved
+        self.links_to_keep = tuple(set([*self.links_to_keep, *self.propellers_link_name]))
+
+        # If kf and km are not provided, we'll extract them from MJCF file
+        # This will be handled in the DroneEntity creation process
+        if self.kf is None or self.km is None:
+            gs.logger.info("KF and KM parameters not provided, will attempt to extract from MJCF file")
+
+
 class Terrain(Morph):
     """
 

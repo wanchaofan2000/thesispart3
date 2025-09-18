@@ -150,7 +150,7 @@ class RigidSolver(Solver):
             if visualize_contact:
                 gs.raise_exception("AvatarEntity does not support 'visualize_contact=True'.")
         else:
-            if isinstance(morph, gs.morphs.Drone):
+            if isinstance(morph, (gs.morphs.Drone, gs.morphs.DroneMJCF)):
                 EntityClass = DroneEntity
             else:
                 EntityClass = RigidEntity
