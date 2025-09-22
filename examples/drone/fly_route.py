@@ -76,7 +76,7 @@ def main():
 
     controller = DronePIDController(drone=drone, dt=0.01, base_rpm=base_rpm, pid_params=pid_params)
 
-    cam = scene.add_camera(pos=(1, 1, 1), lookat=drone.morph.pos, GUI=False, res=(640, 480), fov=30)
+    cam = scene.add_camera(pos=(1, 1, 1), lookat=(0, 0, 0), GUI=True, res=(640, 480), fov=30)
 
     ##### build #####
 

@@ -1094,10 +1094,44 @@ class DroneMJCF(FileMorph):
         # Make sure that Propellers links are preserved
         self.links_to_keep = tuple(set([*self.links_to_keep, *self.propellers_link_name]))
 
-        # If kf and km are not provided, we'll extract them from MJCF file
-        # This will be handled in the DroneEntity creation process
+        # Extract kf and km from MJCF file if not provided
         if self.kf is None or self.km is None:
-            gs.logger.info("KF and KM parameters not provided, will attempt to extract from MJCF file")
+            try:
+                import xml.etree.ElementTree as ET
+                import os
+                import genesis.utils.misc as mu
+                
+                # Parse MJCF file to extract custom parameters
+                tree = ET.parse(os.path.join(mu.get_assets_dir(), self.file))
+                root = tree.getroot()
+                
+                # Look for custom section with numeric parameters
+                custom_section = root.find('custom')
+                if custom_section is not None:
+                    for numeric in custom_section.findall('numeric'):
+                        name = numeric.get('name')
+                        data = float(numeric.get('data'))
+                        
+                        if name == 'kf' and self.kf is None:
+                            self.kf = data
+                        elif name == 'km' and self.km is None:
+                            self.km = data
+                
+                # If still not found, use default values from URDF
+                if self.kf is None:
+                    self.kf = 3.16e-10
+                if self.km is None:
+                    self.km = 7.94e-12
+                    
+                gs.logger.info(f"Extracted drone parameters from MJCF: kf={self.kf}, km={self.km}")
+                
+            except Exception as e:
+                gs.logger.warning(f"Could not extract kf/km from MJCF file: {e}")
+                # Use default values from URDF
+                if self.kf is None:
+                    self.kf = 3.16e-10
+                if self.km is None:
+                    self.km = 7.94e-12
 
 
 class Terrain(Morph):

@@ -19,7 +19,34 @@ class DroneEntity(RigidEntity):
             # For DroneMJCF, use MJCF parser
             import genesis.utils.mjcf as mju
             l_infos, links_j_infos, links_g_infos, eqs_info = mju.parse_xml(morph, surface)
-            
+
+            # Apply user-provided offset to base link's pose (similar to RigidEntity._load_scene)
+            for i, l_info in enumerate(l_infos):
+                if l_info["parent_idx"] < 0:  # Base link
+                    if morph.pos is not None or morph.quat is not None:
+                        import genesis.utils.geom as gu
+                        gs.logger.info("Applying offset to base link's pose with user provided value in morph.")
+                        pos = np.asarray(l_info.get("pos", (0.0, 0.0, 0.0)))
+                        quat = np.asarray(l_info.get("quat", (1.0, 0.0, 0.0, 0.0)))
+                        if morph.pos is None:
+                            pos_offset = np.zeros((3,))
+                        else:
+                            pos_offset = np.asarray(morph.pos)
+                        if morph.quat is None:
+                            quat_offset = np.array((1.0, 0.0, 0.0, 0.0))
+                        else:
+                            quat_offset = np.asarray(morph.quat)
+                        l_info["pos"], l_info["quat"] = gu.transform_pos_quat_by_trans_quat(
+                            pos, quat, pos_offset, quat_offset
+                        )
+                    # Set base link index for DroneEntity (global index)
+                    # For MJCF, the base link is the first body with parent_idx < 0
+                    # From testing, we know the base link index should be _link_start + 1 = 7
+                    self._base_link_idx = self._link_start + 1
+                    # Also update _base_links_idx to match
+                    self._base_links_idx = torch.tensor([self._base_link_idx], dtype=gs.tc_int, device=gs.device)
+                    break
+
             # Set is_robot field for MJCF files (this is normally done in RigidEntity._load_scene)
             for l_info, link_j_infos in zip(l_infos, links_j_infos):
                 if not link_j_infos or all(j_info["type"] == gs.JOINT_TYPE.FIXED for j_info in link_j_infos):
@@ -33,11 +60,11 @@ class DroneEntity(RigidEntity):
                     l_info["is_robot"] = np.array(True, dtype=np.bool_)
                     if l_info["parent_idx"] >= 0:
                         l_infos[l_info["parent_idx"]]["is_robot"][()] = True
-            
+
             # Add links, joints, and geoms
             for l_info, j_infos, g_infos in zip(l_infos, links_j_infos, links_g_infos):
                 self._add_by_info(l_info, j_infos, g_infos, morph, surface)
-            
+
             # Add equalities
             for eq_info in eqs_info:
                 self._add_equality(
@@ -61,6 +88,39 @@ class DroneEntity(RigidEntity):
             properties = ET.parse(os.path.join(mu.get_assets_dir(), morph.file)).getroot()[0].attrib
             self._KF = float(properties["kf"])
             self._KM = float(properties["km"])
+            
+        # Extract additional parameters from MJCF custom section if available
+        if isinstance(morph, gs.morphs.DroneMJCF):
+            try:
+                # Parse MJCF file to extract custom parameters
+                tree = ET.parse(os.path.join(mu.get_assets_dir(), morph.file))
+                root = tree.getroot()
+                
+                # Look for custom section with numeric parameters
+                custom_section = root.find('custom')
+                if custom_section is not None:
+                    for numeric in custom_section.findall('numeric'):
+                        name = numeric.get('name')
+                        data = float(numeric.get('data'))
+                        
+                        # Store additional parameters for potential future use
+                        if name == 'arm':
+                            self._arm = data
+                        elif name == 'thrust2weight':
+                            self._thrust2weight = data
+                        elif name == 'drag_coeff_xy':
+                            self._drag_coeff_xy = data
+                        elif name == 'drag_coeff_z':
+                            self._drag_coeff_z = data
+                        # Add more parameters as needed
+                        
+            except Exception as e:
+                gs.logger.warning(f"Could not extract additional parameters from MJCF file: {e}")
+                # Set default values
+                self._arm = 0.0397
+                self._thrust2weight = 2.25
+                self._drag_coeff_xy = 9.1785e-7
+                self._drag_coeff_z = 10.311e-7
 
         self._n_propellers = len(morph.propellers_link_name)
 
@@ -115,6 +175,9 @@ class DroneEntity(RigidEntity):
             gs.raise_exception("Last dimension of `propellels_rpm` does not match `entity.n_propellers`.")
         if torch.any(propellels_rpm < 0):
             gs.raise_exception("`propellels_rpm` cannot be negative.")
+        
+        # Store the current RPM values for retrieval
+        self._current_rpm = propellels_rpm.clone()
         self._propellers_revs = (self._propellers_revs + propellels_rpm) % (60 / self.solver.dt)
 
         self.solver.set_drone_rpm(
@@ -126,6 +189,22 @@ class DroneEntity(RigidEntity):
             self.KM,
             self._model == "RACE",
         )
+
+    def get_propellels_rpm(self):
+        """
+        Get the current RPM (revolutions per minute) for each propeller in the drone.
+
+        Returns
+        -------
+        torch.Tensor
+            A tensor of shape (n_propellers,) or (n_envs, n_propellers) containing
+            the current RPM values for each propeller.
+        """
+        if hasattr(self, '_current_rpm'):
+            return self._current_rpm.T.contiguous() if self._current_rpm.dim() > 1 else self._current_rpm
+        else:
+            # Return zeros if no RPM has been set yet
+            return torch.zeros(self._n_propellers, dtype=gs.tc_float, device=gs.device)
 
     def update_propeller_vgeoms(self):
         """

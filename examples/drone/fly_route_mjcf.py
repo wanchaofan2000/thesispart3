@@ -45,8 +45,16 @@ def fly_to_point(target, controller: DronePIDController, scene: gs.Scene):
         distance = math.sqrt(x**2 + y**2 + z**2)
         step += 1
         
-        if step % 50 == 0:  # Print progress every 50 steps
+        if step % 10 == 0:  # Print progress every 10 steps to see position updates
+            rpm_tensor = drone.get_propellels_rpm()
+            # Ensure we get a 1D array for single environment
+            if rpm_tensor.dim() > 1:
+                rpm_values = rpm_tensor[0].cpu().numpy()  # Take first environment if batched
+            else:
+                rpm_values = rpm_tensor.cpu().numpy()
+
             print(f"Step {step}: Distance to target: {distance:.3f}m, Position: {drone_pos}")
+            print(f"Propeller RPMs: [{rpm_values[0]:.1f}, {rpm_values[1]:.1f}, {rpm_values[2]:.1f}, {rpm_values[3]:.1f}]")
 
 
 def main():
@@ -72,15 +80,7 @@ def main():
 
     # Use DroneMJCF with cf2.xml for basic drone without payload
     # Match URDF parameters: kf=3.16e-10, km=7.94e-12, mass=0.027kg
-    drone = scene.add_entity(morph=gs.morphs.DroneMJCF(
-        file="xml/cf2.xml", 
-        pos=(0, 0, 0.2),  # Match URDF starting position
-        # Manually specify KF and KM for MJCF files (from URDF properties)
-        kf=3.16e-10,
-        km=7.94e-12,
-        propellers_link_name=("cf2", "cf2", "cf2", "cf2"),  # Use main body as propeller links
-        propellers_spin=(-1, 1, -1, 1)
-    ))
+    drone = scene.add_entity(morph=gs.morphs.DroneMJCF(file="xml/cf2.xml", pos=(0, 0, 0.2)))
 
     # parameters are tuned such that the
     # drone can fly, not optimized (from original fly_route.py)
