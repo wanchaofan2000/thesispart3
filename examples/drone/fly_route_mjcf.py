@@ -107,10 +107,6 @@ def main():
         max_FPS=60,
     )
 
-    # Hover for a bit
-    hover(drone)
-    for _ in range(100):
-        scene.step()
 
     # Fly to different points
     targets = [
